@@ -30,3 +30,9 @@ export interface CompatibilityResponse {
   strengths: string[];
   challenges: string[];
 }
+
+export interface UserProfile {
+  name: string;
+  birthDate: string;
+  zodiacId: ZodiacSign;
+}

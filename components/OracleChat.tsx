@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { askOracle } from '../services/geminiService';
+import { askOracleStream } from '../services/geminiService';
 
 interface Message {
   role: 'user' | 'model';
@@ -9,7 +9,7 @@ interface Message {
 
 const OracleChat: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'model', content: "欢迎你，探寻者。我是星启祭司。星辰正在向有心人低语。今天你想了解关于命运的什么指示？" }
+    { role: 'model', content: "欢迎来到星语殿。我是星启祭司。星轨今日向我展示了一些关于你的秘密...你想窥见哪一部分命运？" }
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -29,72 +29,95 @@ const OracleChat: React.FC = () => {
     setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
     setIsTyping(true);
 
+    setMessages(prev => [...prev, { role: 'model', content: '' }]);
+    
+    let fullResponse = '';
     try {
-      const history = messages.map(m => ({
-        role: m.role,
-        parts: [{ text: m.content }]
-      }));
-      const reply = await askOracle(userMsg, history);
-      setMessages(prev => [...prev, { role: 'model', content: reply }]);
+      const stream = askOracleStream(userMsg, []);
+      for await (const chunk of stream) {
+        fullResponse += chunk;
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1].content = fullResponse;
+          return updated;
+        });
+      }
     } catch (e) {
-      setMessages(prev => [...prev, { role: 'model', content: "哎呀，星轨似乎有些错乱。请稍后再试。" }]);
+      console.error(e);
+      setMessages(prev => {
+        const updated = [...prev];
+        updated[updated.length - 1].content = "星象混乱，杂音遮蔽了真理。请稍后再向众星祈祷。";
+        return updated;
+      });
     } finally {
       setIsTyping(false);
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto flex flex-col h-[calc(100vh-180px)] md:h-[70vh]">
-      <div className="text-center mb-4 md:mb-6 pt-2">
-        <h2 className="text-3xl md:text-4xl font-sans font-bold">星语占卜</h2>
-        <p className="text-slate-400 text-sm">随时随地的宇宙指引</p>
+    <div className="max-w-4xl mx-auto flex flex-col h-[calc(100vh-220px)] md:h-[80vh] p-4 md:p-0">
+      <div className="text-center mb-8 md:mb-12 space-y-4">
+        <h2 className="text-4xl md:text-6xl font-cinzel font-bold text-white tracking-[0.3em] text-glow">星语占卜</h2>
+        <div className="flex justify-center items-center gap-4">
+          <div className="w-12 h-px bg-gradient-to-r from-transparent to-yellow-400/40"></div>
+          <span className="text-[10px] text-yellow-400/60 uppercase tracking-[0.5em]">Celestial Portal</span>
+          <div className="w-12 h-px bg-gradient-to-l from-transparent to-yellow-400/40"></div>
+        </div>
       </div>
 
-      <div className="flex-1 glass rounded-2xl md:rounded-3xl flex flex-col overflow-hidden border-white/5 shadow-2xl">
-        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 md:space-y-6 scrollbar-hide">
+      <div className="flex-1 glass rounded-[3rem] flex flex-col overflow-hidden border-white/10 shadow-2xl relative">
+        <div className="absolute top-0 inset-x-0 h-12 bg-gradient-to-b from-slate-950/40 to-transparent pointer-events-none z-10"></div>
+        
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 md:p-14 space-y-10 scroll-smooth scrollbar-hide">
           {messages.map((m, i) => (
             <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div 
-                className={`max-w-[85%] md:max-w-[80%] p-4 md:p-5 rounded-2xl text-sm md:text-base ${
-                  m.role === 'user' 
-                    ? 'bg-yellow-400/10 border border-yellow-400/20 text-white rounded-tr-none' 
-                    : 'bg-white/5 border border-white/10 text-slate-200 rounded-tl-none italic font-light leading-relaxed font-sans'
-                }`}
-              >
-                {m.content}
+              <div className={`relative group max-w-[90%] md:max-w-[80%] ${m.role === 'user' ? 'order-1' : 'order-2'}`}>
+                <div 
+                  className={`p-6 md:p-8 rounded-[2rem] text-sm md:text-lg leading-relaxed shadow-xl ${
+                    m.role === 'user' 
+                      ? 'bg-gradient-to-br from-yellow-500/20 to-orange-500/10 border border-yellow-500/30 text-white rounded-tr-none' 
+                      : 'bg-white/5 border border-white/10 text-slate-100 rounded-tl-none font-serif italic'
+                  }`}
+                >
+                  {m.content || (isTyping && i === messages.length - 1 ? (
+                    <div className="flex gap-2 items-center text-yellow-400/60">
+                      <span className="animate-bounce">✧</span>
+                      <span className="animate-bounce delay-100">✧</span>
+                      <span className="animate-bounce delay-200">✧</span>
+                      <span className="ml-2 text-xs uppercase tracking-widest font-sans">通灵中...</span>
+                    </div>
+                  ) : "")}
+                </div>
+                {m.role === 'model' && (
+                  <div className="absolute -left-4 -top-4 w-10 h-10 rounded-full glass border-white/10 flex items-center justify-center text-yellow-400 text-xl shadow-lg">
+                    ☯
+                  </div>
+                )}
               </div>
             </div>
           ))}
-          {isTyping && (
-            <div className="flex justify-start">
-              <div className="bg-white/5 border border-white/10 p-3 md:p-4 rounded-2xl animate-pulse">
-                <div className="flex gap-2">
-                  <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-bounce"></div>
-                  <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-bounce delay-100"></div>
-                  <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-bounce delay-200"></div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
-        <div className="p-4 md:p-6 bg-white/5 border-t border-white/10 pb-safe">
-          <div className="flex gap-2 md:gap-3">
+        <div className="p-8 md:p-12 bg-black/40 border-t border-white/10 pb-safe backdrop-blur-3xl">
+          <div className="relative flex items-center">
             <input 
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="向星辰祈祷..."
-              className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 md:px-6 py-2 md:py-3 text-sm outline-none focus:border-yellow-400/50 transition-colors font-sans"
+              placeholder="在星空下写下你的困惑..."
+              className="w-full bg-white/5 border border-white/10 rounded-full px-10 py-5 md:py-6 text-sm md:text-lg outline-none focus:border-yellow-400/40 transition-all placeholder:text-slate-600 pr-32 font-light tracking-wide"
             />
             <button 
               onClick={handleSend}
               disabled={isTyping || !input.trim()}
-              className="bg-yellow-400 hover:bg-yellow-300 active:scale-95 text-slate-900 px-4 md:px-6 py-2 md:py-3 rounded-full font-bold text-sm transition-all disabled:opacity-50 font-sans"
+              className="absolute right-4 bg-yellow-400 hover:bg-yellow-300 active:scale-95 text-slate-950 px-8 py-3 md:py-4 rounded-full font-bold text-xs md:text-sm tracking-widest transition-all disabled:opacity-30 disabled:grayscale uppercase"
             >
-              占卜
+              祈告
             </button>
+          </div>
+          <div className="mt-4 text-center">
+            <p className="text-[9px] text-slate-600 uppercase tracking-[0.3em]">星辰始终在倾听，但答案往往藏在你自己心中</p>
           </div>
         </div>
       </div>
